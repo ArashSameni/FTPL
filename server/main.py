@@ -1,3 +1,4 @@
+from ast import arg
 import socket
 import threading
 
@@ -15,21 +16,39 @@ COLORS = {
     "RESET": "\u001b[0m",
 }
 
+active_connections = 0
+print_lock = threading.Lock()
 
-def handle_client_connection(conn, addr):
-    rec = conn.recv(1024)
-    print('received: ' + str(rec))
-    while conn:
-        conn.sendall(b"test")
+
+class ClientThread(threading.Thread):
+    def __init__(self, conn, addr, *args):
+        self.conn = conn
+        self.addr = addr
+        threading.Thread.__init__(self, args=args)
+
+    def run(self):
+        print_lock.acquire()
+        print("Starting " + str(self.addr))
+        print_lock.release()
 
 
 def handle_incoming_requests(socket):
+    global active_connections
+
     while True:
         conn, addr = socket.accept()
-        threading.Thread(target=handle_client_connection,
-                         args=(conn, addr)).start()
-        print(f'[NEW CONNECTION] {addr[0]} connected at port {addr[1]}')
-        print(f'[ACTIVE CONNECTIONS] {threading.activeCount() - 1}')
+        ClientThread(conn, addr).start()
+
+        active_connections += 1
+
+        print_lock.acquire()
+        print(COLORS['YELLOW'] +
+              f'[NEW CONNECTION] {addr[0]} connected at port {addr[1]}' +
+              COLORS['RESET'])
+        print(COLORS['GREEN'] +
+              f'[ACTIVE CONNECTIONS] {active_connections}' +
+              COLORS['RESET'])
+        print_lock.release()
 
 
 def main():
