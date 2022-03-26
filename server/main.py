@@ -90,7 +90,7 @@ class ClientThread(threading.Thread):
             elif cmd.type == Command.CD:
                 self.cd(cmd.args)
             elif cmd.type == Command.DELETE:
-                self.delete()
+                self.delete(cmd.args)
             elif cmd.type == Command.RENAME:
                 self.rename()
 
@@ -160,8 +160,17 @@ class ClientThread(threading.Thread):
 
         self.send('250 Directory successfully changed.')
 
-    def delete(self):
-        print("delete")
+    def delete(self, file_name):
+        try:
+            to_remove = self.absolute_path(file_name)
+            if not to_remove.startswith(FILES_DIR):
+                raise Exception()
+
+            os.remove(to_remove)
+            self.send(
+                f'250 Delete operation successful.')
+        except:
+            self.send('550 Delete operation failed.')
 
     def rename(self):
         print("rename")
