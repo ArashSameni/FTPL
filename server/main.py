@@ -21,10 +21,15 @@ COLORS = {
 
 active_connections = 0
 print_lock = threading.Lock()
+def print_colorful(short_desc, text, color):
+    SPACE_NEEDED = 21
+    spaces = ' ' * (SPACE_NEEDED - len(short_desc))
 
+    print_lock.acquire()
+    print(COLORS[color] + short_desc + spaces + text + COLORS['RESET'])
+    print_lock.release()
 
 class Command():
-    HELP = 'help'
     LIST = 'ls'
     GET = 'get'
     PUT = 'put'
@@ -55,27 +60,17 @@ class ClientThread(threading.Thread):
         threading.Thread.__init__(self, args=args)
 
     def run(self):
-        print_lock.acquire()
-        print(COLORS['YELLOW'] +
-              f'[NEW CONNECTION] {self.addr[0]} connected at port {self.addr[1]}' +
-              COLORS['RESET'])
-        print_lock.release()
+        print_colorful('[NEW CONNECTION]', f'{self.addr[0]} connected at port {self.addr[1]}', 'YELLOW')
 
         while True:
             message = self.conn.recv(MESSAGE_SIZE).decode(
                 ClientThread.ENC_TYPE)
             if not message:
                 break
-            print_lock.acquire()
-            print(COLORS['CYAN'] +
-                  f'[{self.addr[0]}:{self.addr[1]}] "{message}"' +
-                  COLORS['RESET'])
-            print_lock.release()
+            print_colorful(f'[{self.addr[0]}:{self.addr[1]}]', f'"{message}"', 'CYAN')
 
             cmd = Command(message)
-            if cmd.type == Command.HELP:
-                self.help()
-            elif cmd.type == Command.LIST:
+            if cmd.type == Command.LIST:
                 self.list()
             elif cmd.type == Command.GET:
                 self.get()
@@ -100,19 +95,10 @@ class ClientThread(threading.Thread):
         global active_connections
         active_connections -= 1
 
-        print_lock.acquire()
-        print(COLORS['RED'] +
-              f'[CONNECTION LOST] {self.addr[0]}:{self.addr[1]} disconnected' +
-              COLORS['RESET'])
-        print(COLORS['GREEN'] +
-              f'[ACTIVE CONNECTIONS] {active_connections}' +
-              COLORS['RESET'])
-        print_lock.release()
+        print_colorful('[CONNECTION LOST]', f'{self.addr[0]}:{self.addr[1]} disconnected', 'RED')
+        print_colorful('[ACTIVE CONNECTIONS]', str(active_connections), 'GREEN')
 
         self.conn.close()
-
-    def help(self):
-        print("requested help")
 
     def list(self):
         print("list")
@@ -190,24 +176,15 @@ def handle_incoming_requests(socket):
         ClientThread(conn, addr).start()
 
         active_connections += 1
-
-        print_lock.acquire()
-        print(COLORS['GREEN'] +
-              f'[ACTIVE CONNECTIONS] {active_connections}' +
-              COLORS['RESET'])
-        print_lock.release()
+        print_colorful('[ACTIVE CONNECTIONS]', str(active_connections), 'GREEN')
 
 
 def main():
-    print(COLORS['RED'] +
-          f'[STARTING SERVER] Starting server...' +
-          COLORS['RESET'])
+    print_colorful('[STARTING SERVER]', 'Starting server...', 'YELLOW')
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((HOST, PORT))
     server_socket.listen()
-    print(COLORS['GREEN'] +
-          f'[SERVER STARTED] Server is listening on {HOST}:{PORT}' +
-          COLORS['RESET'])
+    print_colorful('[SERVER STARTED]', f'Server is listening on {HOST}:{PORT}', 'GREEN')
 
     handle_incoming_requests(server_socket)
 
