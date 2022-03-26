@@ -30,6 +30,7 @@ class Command():
     PUT = 'put'
     PWD = 'pwd'
     MKDIR = 'mkdir'
+    RMDIR = 'rmdir'
     CD = 'cd'
     DELETE = 'delete'
     RENAME = 'rename'
@@ -84,6 +85,8 @@ class ClientThread(threading.Thread):
                 self.pwd()
             elif cmd.type == Command.MKDIR:
                 self.mkdir(cmd.args)
+            elif cmd.type == Command.RMDIR:
+                self.rmdir(cmd.args)
             elif cmd.type == Command.CD:
                 self.cd(cmd.args)
             elif cmd.type == Command.DELETE:
@@ -122,19 +125,30 @@ class ClientThread(threading.Thread):
 
     def pwd(self):
         self.send(
-            f'257 /"{self.current_directory}" is the current directory')
+            f'257 "/{self.current_directory}" is the current directory')
 
     def mkdir(self, dir_name):
         try:
-            os.mkdir(os.path.join(FILES_DIR, self.current_directory, dir_name))
+            os.mkdir(self.absolute_path(dir_name))
             self.send(
                 f'257 /{os.path.join(self.current_directory, dir_name)} created')
         except:
             self.send('550 Failed to make directory.')
 
+    def rmdir(self, dir_name):
+        try:
+            to_remove = self.absolute_path(dir_name)
+            if not to_remove.startswith(FILES_DIR):
+                raise Exception()
+
+            os.rmdir(to_remove)
+            self.send(
+                f'250 Remove directory operation successful.')
+        except:
+            self.send('550 Remove directory operation failed.')
+
     def cd(self, dir_path):
-        new_path = os.path.normpath(os.path.join(
-            FILES_DIR, self.current_directory, dir_path))
+        new_path = self.absolute_path(dir_path)
         if not os.path.isdir(new_path) or not new_path.startswith(FILES_DIR):
             self.send('550 Failed to change directory.')
             return
@@ -151,6 +165,9 @@ class ClientThread(threading.Thread):
 
     def rename(self):
         print("rename")
+
+    def absolute_path(self, joining_path):
+        return os.path.normpath(os.path.join(FILES_DIR, self.current_directory, joining_path))
 
     def send(self, message):
         self.conn.sendall(message.encode(ClientThread.ENC_TYPE))
