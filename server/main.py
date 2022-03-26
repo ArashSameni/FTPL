@@ -1,10 +1,12 @@
 import socket
 import threading
+import os
+import pathlib
 
 HOST = "127.0.0.1"
 PORT = 65432
-ENC_TYPE = 'utf-8'
 MESSAGE_SIZE = 1024
+FILES_DIR = str(pathlib.Path(__file__).parent.resolve()) + '/files'
 COLORS = {
     "BLACK": "\u001b[30;1m",
     "RED": "\u001b[31;1m",
@@ -43,14 +45,15 @@ class Command():
 
 
 class ClientThread(threading.Thread):
+    ENC_TYPE = 'utf-8'
+
     def __init__(self, conn, addr, *args):
         self.conn = conn
         self.addr = addr
+        self.current_directory = ''
         threading.Thread.__init__(self, args=args)
 
     def run(self):
-        global ENC_TYPE, active_connections
-
         print_lock.acquire()
         print(COLORS['YELLOW'] +
               f'[NEW CONNECTION] {self.addr[0]} connected at port {self.addr[1]}' +
@@ -58,7 +61,8 @@ class ClientThread(threading.Thread):
         print_lock.release()
 
         while True:
-            message = self.conn.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+            message = self.conn.recv(MESSAGE_SIZE).decode(
+                ClientThread.ENC_TYPE)
             if not message:
                 break
             print_lock.acquire()
@@ -71,26 +75,28 @@ class ClientThread(threading.Thread):
             if cmd.type == Command.HELP:
                 self.help()
             elif cmd.type == Command.LIST:
-                pass
+                self.list()
             elif cmd.type == Command.GET:
-                pass
+                self.get()
             elif cmd.type == Command.PUT:
-                pass
+                self.put()
             elif cmd.type == Command.PWD:
-                pass
+                self.pwd()
             elif cmd.type == Command.MKDIR:
-                pass
+                self.mkdir()
             elif cmd.type == Command.CD:
-                pass
+                self.cd(cmd.args)
             elif cmd.type == Command.DELETE:
-                pass
+                self.delete()
             elif cmd.type == Command.RENAME:
-                pass
+                self.rename()
 
         self.close_connection()
 
     def close_connection(self):
+        global active_connections
         active_connections -= 1
+
         print_lock.acquire()
         print(COLORS['RED'] +
               f'[CONNECTION LOST] {self.addr[0]}:{self.addr[1]} disconnected' +
@@ -99,10 +105,51 @@ class ClientThread(threading.Thread):
               f'[ACTIVE CONNECTIONS] {active_connections}' +
               COLORS['RESET'])
         print_lock.release()
+
         self.conn.close()
 
     def help(self):
         print("requested help")
+
+    def list(self):
+        print("list")
+
+    def get(self):
+        print("get")
+
+    def put(self):
+        print("put")
+
+    def pwd(self):
+        self.send(
+            f'257 "{"/" + self.current_directory}" is the current directory')
+
+    def mkdir(self):
+        print("mkdir")
+
+    def cd(self, dir_path):
+        new_path = os.path.normpath(os.path.join(
+            FILES_DIR, self.current_directory, dir_path))
+        print(new_path)
+        if not os.path.isdir(new_path) or not new_path.startswith(FILES_DIR):
+            self.send('550 Failed to change directory.')
+            return
+
+        self.current_directory = os.path.normpath(
+            os.path.join(self.current_directory, dir_path))
+        if self.current_directory == '.':
+            self.current_directory = ''
+
+        self.send('250 Directory successfully changed.')
+
+    def delete(self):
+        print("delete")
+
+    def rename(self):
+        print("rename")
+
+    def send(self, message):
+        self.conn.sendall(message.encode(ClientThread.ENC_TYPE))
 
 
 def handle_incoming_requests(socket):
