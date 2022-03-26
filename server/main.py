@@ -83,7 +83,7 @@ class ClientThread(threading.Thread):
             elif cmd.type == Command.PWD:
                 self.pwd()
             elif cmd.type == Command.MKDIR:
-                self.mkdir()
+                self.mkdir(cmd.args)
             elif cmd.type == Command.CD:
                 self.cd(cmd.args)
             elif cmd.type == Command.DELETE:
@@ -122,15 +122,19 @@ class ClientThread(threading.Thread):
 
     def pwd(self):
         self.send(
-            f'257 "{"/" + self.current_directory}" is the current directory')
+            f'257 /"{self.current_directory}" is the current directory')
 
-    def mkdir(self):
-        print("mkdir")
+    def mkdir(self, dir_name):
+        try:
+            os.mkdir(os.path.join(FILES_DIR, self.current_directory, dir_name))
+            self.send(
+                f'257 /{os.path.join(self.current_directory, dir_name)} created')
+        except:
+            self.send('550 Failed to make directory.')
 
     def cd(self, dir_path):
         new_path = os.path.normpath(os.path.join(
             FILES_DIR, self.current_directory, dir_path))
-        print(new_path)
         if not os.path.isdir(new_path) or not new_path.startswith(FILES_DIR):
             self.send('550 Failed to change directory.')
             return
