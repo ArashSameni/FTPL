@@ -120,14 +120,7 @@ class ClientThread(threading.Thread):
 
     def list(self):
         try:
-            data_socket = self.create_data_channel()
-            port = data_socket.getsockname()[1]
-            print_colorful(
-                '[DATA CHANNEL]', f'Data channel created at {HOST}:{port}', 'YELLOW')
-            self.send(f'200 PORT {port}')
-            conn, _ = data_socket.accept()
-            print_colorful(
-                '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} connected to data channel', 'GREEN')
+            conn = self.data_channel()
 
             current_dir = self.absolute_path()
 
@@ -158,19 +151,13 @@ class ClientThread(threading.Thread):
     def get(self, file_name):
         try:
             to_upload = self.absolute_path(file_name)
-            data_socket = self.create_data_channel()
-            port = data_socket.getsockname()[1]
-            print_colorful(
-                '[DATA CHANNEL]', f'Data channel created at {HOST}:{port}', 'YELLOW')
-            self.send(f'200 PORT {port}')
-            conn, _ = data_socket.accept()
-            data_socket.shutdown(socket.SHUT_WR)
-            print_colorful(
-                '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} connected to data channel', 'GREEN')
+
+            conn = self.data_channel()
             file = open(to_upload, 'r')
             conn.send(file.read().encode(ClientThread.ENC_TYPE))
             file.close()
             conn.shutdown(socket.SHUT_WR)
+
             self.send('226 Transfer complete.')
             print_colorful(
                 '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} transfer completed', 'GREEN')
@@ -181,16 +168,7 @@ class ClientThread(threading.Thread):
         try:
             to_download = self.absolute_path(file_name)
 
-            data_socket = self.create_data_channel()
-            port = data_socket.getsockname()[1]
-            print_colorful(
-                '[DATA CHANNEL]', f'Data channel created at {HOST}:{port}', 'YELLOW')
-            self.send(f'200 PORT {port}')
-            conn, _ = data_socket.accept()
-            data_socket.shutdown(socket.SHUT_WR)
-            print_colorful(
-                '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} connected to data channel', 'GREEN')
-
+            conn = self.data_channel()
             file = open(to_download, 'w')
             data = conn.recv(MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
             while data:
@@ -250,7 +228,8 @@ class ClientThread(threading.Thread):
     def rename(self, args):
         from_name, to_name = shlex.split(args)
         try:
-            os.rename(self.absolute_path(from_name), self.absolute_path(to_name))
+            os.rename(self.absolute_path(from_name),
+                      self.absolute_path(to_name))
             self.send('250 Rename successful.')
         except:
             self.send('550 RNFR command failed.')
@@ -267,10 +246,24 @@ class ClientThread(threading.Thread):
         data_socket.listen()
         return data_socket
 
+    def data_channel(self):
+        data_socket = self.create_data_channel()
+        port = data_socket.getsockname()[1]
+        print_colorful(
+            '[DATA CHANNEL]', f'Data channel created at {HOST}:{port}', 'YELLOW')
+        self.send(f'200 PORT {port}')
+        conn, _ = data_socket.accept()
+        data_socket.shutdown(socket.SHUT_WR)
+        print_colorful(
+            '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} connected to data channel', 'GREEN')
+
+        return conn
+
     def absolute_path(self, joining_path=''):
-        joined_path = os.path.normpath(os.path.join(FILES_DIR, self.current_directory, joining_path))
+        joined_path = os.path.normpath(os.path.join(
+            FILES_DIR, self.current_directory, joining_path))
         if not joined_path.startswith(FILES_DIR):
-                raise Exception()
+            raise Exception()
 
         return joined_path
 
