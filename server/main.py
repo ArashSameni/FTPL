@@ -129,6 +129,8 @@ class ClientThread(threading.Thread):
             file.close()
             conn.shutdown(socket.SHUT_WR)
             self.send('226 Transfer complete.')
+            print_colorful(
+                '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} transfer completed', 'GREEN')
         except:
             self.send('550 Failed to open file.')
 

@@ -1,4 +1,5 @@
 import socket
+import shlex
 
 HOST = "127.0.0.1"
 PORT = 2121
@@ -77,11 +78,19 @@ def print_result(result):
 
 
 def handle_get_command(client_socket, cmd):
-    remote_file_name = cmd.args
-    local_file_name = remote_file_name
-    if ' ' in cmd.args:
-        remote_file_name, local_file_name = cmd.args.split(' ')
+    remote_file_name, local_file_name = '', ''
+
+    args = shlex.split(cmd.args)
+    if len(args) == 0 or len(args) > 2:
+        print_colorful('[ERROR]', "Invalid use of get command", 'RED')
+        return
     
+    remote_file_name = args[0]
+    if len(args) == 1:
+        local_file_name = remote_file_name.split('/')[-1]
+    else:
+        local_file_name = args[1]
+
     client_socket.sendall(f'get {remote_file_name}'.encode(ENC_TYPE))
     port = 0
     result = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
@@ -95,13 +104,17 @@ def handle_get_command(client_socket, cmd):
         data_socket.connect((HOST, port))
     except:
         print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
-        
+        return
+
+    file = open(local_file_name, 'w')
     data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
     while data:
+        file.write(data)
         data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-
+    file.close()
     result = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
     print_result(result)
+
 
 def handle_commands(client_socket):
     while True:
