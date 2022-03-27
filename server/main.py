@@ -225,7 +225,12 @@ class ClientThread(threading.Thread):
             self.send('550 Delete operation failed.')
 
     def rename(self, args):
-        print("rename")
+        from_name, to_name = shlex.split(args)
+        try:
+            os.rename(self.absolute_path(from_name), self.absolute_path(to_name))
+            self.send('250 Rename successful.')
+        except:
+            self.send('550 RNFR command failed.')
 
     def create_data_channel(self):
         random_port = randint(3000, 50000)

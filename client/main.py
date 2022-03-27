@@ -103,6 +103,10 @@ class ClientHandler():
             except:
                 print_colorful('[ERROR]', 'Bad command', 'RED')
                 continue
+            
+            if cmd.type == 'rename' and len(shlex.split(cmd.args)) != 2:
+                print_colorful('[ERROR]', "Invalid use of rename command", 'RED')
+                continue
 
             if cmd.type == 'get':
                 self.get(cmd)
