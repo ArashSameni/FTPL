@@ -120,27 +120,16 @@ class ClientHandler():
                 print_result(data)
 
     def list(self):
+        data_channel = self.connect_to_data_channel()
+        if not data_channel:
+            return
+
         self.send('ls')
-        port = 0
-        result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-        if result.startswith('200'):
-            port = int(result.split(' ')[-1])
-        else:
-            print_result(result)
-            return
-
-        data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            data_socket.connect((HOST, port))
-        except:
-            print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
-            return
-
         print(COLORS['CYAN'], end='')
-        data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        data = data_channel.recv(MESSAGE_SIZE).decode(ENC_TYPE)
         while data:
             print(data)
-            data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+            data = data_channel.recv(MESSAGE_SIZE).decode(ENC_TYPE)
         print(COLORS['RESET'], end='')
 
         result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
@@ -160,26 +149,16 @@ class ClientHandler():
         else:
             local_file_name = args[1]
 
-        self.send(f'get {remote_file_name}')
-        port = 0
-        result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-        if result.startswith('200'):
-            port = int(result.split(' ')[-1])
-        else:
-            print_result(result)
-            return
-        data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            data_socket.connect((HOST, port))
-        except:
-            print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
+        data_channel = self.connect_to_data_channel()
+        if not data_channel:
             return
 
+        self.send(f'get {remote_file_name}')
         file = open(local_file_name, 'w')
-        data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        data = data_channel.recv(MESSAGE_SIZE).decode(ENC_TYPE)
         while data:
             file.write(data)
-            data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+            data = data_channel.recv(MESSAGE_SIZE).decode(ENC_TYPE)
         file.close()
         result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
         print_result(result)
@@ -202,21 +181,11 @@ class ClientHandler():
             print_colorful('[ERROR]', "No such file or directory", 'RED')
             return
         
-        self.send(f'put {remote_file_name}')
+        data_channel = self.connect_to_data_channel()
+        if not data_channel:
+            return
 
-        port = 0
-        result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-        if result.startswith('200'):
-            port = int(result.split(' ')[-1])
-        else:
-            print_result(result)
-            return
-        data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            data_socket.connect((HOST, port))
-        except:
-            print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
-            return
+        self.send(f'put {remote_file_name}')
 
         file = None
         data = ''
@@ -227,12 +196,30 @@ class ClientHandler():
             print_colorful('[ERROR]', "Permission denied", 'RED')
             return
 
-        data_socket.send(data.encode(ENC_TYPE))
+        data_channel.send(data.encode(ENC_TYPE))
         file.close()
-        data_socket.shutdown(socket.SHUT_WR)
-        
+        data_channel.shutdown(socket.SHUT_WR)
+
         result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
         print_result(result)
+
+    def connect_to_data_channel(self):
+        self.send(f'pasv')
+        port = 0
+        result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        if result.startswith('200'):
+            port = int(result.split(' ')[-1])
+        else:
+            print_result(result)
+            return None
+        data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            data_socket.connect((HOST, port))
+        except:
+            print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
+            return None
+        
+        return data_socket
 
     def send(self, message):
         self.socket.sendall(message.encode(ENC_TYPE))

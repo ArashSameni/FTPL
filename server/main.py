@@ -53,9 +53,11 @@ class Command():
     CD = 'cd'
     DELETE = 'delete'
     RENAME = 'rename'
+    PASV = 'pasv'
 
     def __init__(self, cmd):
         self.type, self.args = Command.split_command(cmd)
+        self.data_connection = None
 
     def split_command(cmd):
         first_space = cmd.find(' ')
@@ -104,6 +106,8 @@ class ClientThread(threading.Thread):
                 self.delete(cmd.args)
             elif cmd.type == Command.RENAME:
                 self.rename(cmd.args)
+            elif cmd.type == Command.PASV:
+                self.pasv()
 
         self.close_connection()
 
@@ -120,28 +124,26 @@ class ClientThread(threading.Thread):
 
     def list(self):
         try:
-            conn = self.data_channel()
-
             current_dir = self.absolute_path()
 
-            conn.send('[LIST]'.encode(ClientThread.ENC_TYPE))
+            self.data_connection.send('[LIST]'.encode(ClientThread.ENC_TYPE))
             sleep(0.001)
-            conn.send('  > .'.encode(ClientThread.ENC_TYPE))
+            self.data_connection.send('  > .'.encode(ClientThread.ENC_TYPE))
             sleep(0.001)
             if self.current_directory:
-                conn.send('  > ..'.encode(ClientThread.ENC_TYPE))
+                self.data_connection.send('  > ..'.encode(ClientThread.ENC_TYPE))
 
             ls = os.listdir(current_dir)
             for fname in ls:
                 path_to_file = current_dir + '/' + fname
                 if os.path.isdir(path_to_file):
-                    conn.send(f'  > {fname}'.encode(ClientThread.ENC_TYPE))
+                    self.data_connection.send(f'  > {fname}'.encode(ClientThread.ENC_TYPE))
                 elif os.path.isfile(path_to_file):
-                    conn.send(('    %-20s' % fname + human_readable_size(
+                    self.data_connection.send(('    %-20s' % fname + human_readable_size(
                         os.path.getsize(path_to_file))).encode(ClientThread.ENC_TYPE))
                 sleep(0.001)
 
-            conn.shutdown(socket.SHUT_WR)
+            self.data_connection.shutdown(socket.SHUT_WR)
             self.send('226 Directory send OK.')
             print_colorful(
                 '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} directory sent', 'GREEN')
@@ -152,11 +154,10 @@ class ClientThread(threading.Thread):
         try:
             to_upload = self.absolute_path(file_name)
 
-            conn = self.data_channel()
             file = open(to_upload, 'r')
-            conn.send(file.read().encode(ClientThread.ENC_TYPE))
+            self.data_connection.send(file.read().encode(ClientThread.ENC_TYPE))
             file.close()
-            conn.shutdown(socket.SHUT_WR)
+            self.data_connection.shutdown(socket.SHUT_WR)
 
             self.send('226 Transfer complete.')
             print_colorful(
@@ -168,12 +169,11 @@ class ClientThread(threading.Thread):
         try:
             to_download = self.absolute_path(file_name)
 
-            conn = self.data_channel()
             file = open(to_download, 'w')
-            data = conn.recv(MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
+            data = self.data_connection.recv(MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
             while data:
                 file.write(data)
-                data = conn.recv(MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
+                data = self.data_connection.recv(MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
             file.close()
 
             self.send('226 Transfer complete.')
@@ -234,6 +234,18 @@ class ClientThread(threading.Thread):
         except:
             self.send('550 RNFR command failed.')
 
+    def pasv(self):
+        data_socket = self.create_data_channel()
+        port = data_socket.getsockname()[1]
+        print_colorful(
+            '[DATA CHANNEL]', f'Data channel created at {HOST}:{port}', 'YELLOW')
+        self.send(f'200 PORT {port}')
+        conn, _ = data_socket.accept()
+        data_socket.shutdown(socket.SHUT_WR)
+        print_colorful(
+            '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} connected to data channel', 'GREEN')
+        self.data_connection = conn
+
     def create_data_channel(self):
         random_port = randint(3000, 50000)
         data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -245,19 +257,6 @@ class ClientThread(threading.Thread):
                 random_port = randint(3000, 50000)
         data_socket.listen()
         return data_socket
-
-    def data_channel(self):
-        data_socket = self.create_data_channel()
-        port = data_socket.getsockname()[1]
-        print_colorful(
-            '[DATA CHANNEL]', f'Data channel created at {HOST}:{port}', 'YELLOW')
-        self.send(f'200 PORT {port}')
-        conn, _ = data_socket.accept()
-        data_socket.shutdown(socket.SHUT_WR)
-        print_colorful(
-            '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} connected to data channel', 'GREEN')
-
-        return conn
 
     def absolute_path(self, joining_path=''):
         joined_path = os.path.normpath(os.path.join(
