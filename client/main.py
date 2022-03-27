@@ -108,17 +108,19 @@ class ClientHandler():
                 print_colorful('[ERROR]', "Invalid use of rename command", 'RED')
                 continue
 
-            if cmd.type == 'get':
-                self.get(cmd)
-            elif cmd.type == 'ls':
+            if cmd.type == 'ls':
                 self.list()
+            elif cmd.type == 'get':
+                self.get(cmd)
+            elif cmd.type == 'put':
+                self.put(cmd)
             else:
-                self.socket.sendall(cmd.text().encode(ENC_TYPE))
+                self.send(cmd.text())
                 data = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
                 print_result(data)
 
     def list(self):
-        self.socket.sendall('ls'.encode(ENC_TYPE))
+        self.send('ls')
         port = 0
         result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
         if result.startswith('200'):
@@ -158,7 +160,7 @@ class ClientHandler():
         else:
             local_file_name = args[1]
 
-        self.socket.sendall(f'get {remote_file_name}'.encode(ENC_TYPE))
+        self.send(f'get {remote_file_name}')
         port = 0
         result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
         if result.startswith('200'):
@@ -182,6 +184,58 @@ class ClientHandler():
         result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
         print_result(result)
 
+    def put(self, cmd):
+        local_file_name, remote_file_name = '', ''
+
+        args = shlex.split(cmd.args)
+        if len(args) == 0 or len(args) > 2:
+            print_colorful('[ERROR]', "Invalid use of put command", 'RED')
+            return
+
+        local_file_name = args[0]
+        if len(args) == 1:
+            remote_file_name = local_file_name.split('/')[-1]
+        else:
+            remote_file_name = args[1]
+
+        if not os.path.isfile(local_file_name):
+            print_colorful('[ERROR]', "No such file or directory", 'RED')
+            return
+        
+        self.send(f'put {remote_file_name}')
+
+        port = 0
+        result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        if result.startswith('200'):
+            port = int(result.split(' ')[-1])
+        else:
+            print_result(result)
+            return
+        data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            data_socket.connect((HOST, port))
+        except:
+            print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
+            return
+
+        file = None
+        data = ''
+        try:
+            file = open(local_file_name, 'r')
+            data = file.read()
+        except:
+            print_colorful('[ERROR]', "Permission denied", 'RED')
+            return
+
+        data_socket.send(data.encode(ENC_TYPE))
+        file.close()
+        data_socket.shutdown(socket.SHUT_WR)
+        
+        result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        print_result(result)
+
+    def send(self, message):
+        self.socket.sendall(message.encode(ENC_TYPE))
 
 def main():
     print_colorful('[CONNECTING]', 'Connecting to server...', 'YELLOW')

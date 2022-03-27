@@ -91,7 +91,7 @@ class ClientThread(threading.Thread):
             elif cmd.type == Command.GET:
                 self.get(cmd.args)
             elif cmd.type == Command.PUT:
-                self.put()
+                self.put(cmd.args)
             elif cmd.type == Command.PWD:
                 self.pwd()
             elif cmd.type == Command.MKDIR:
@@ -158,14 +158,13 @@ class ClientThread(threading.Thread):
     def get(self, file_name):
         try:
             to_upload = self.absolute_path(file_name)
-            if not to_upload.startswith(FILES_DIR):
-                raise Exception()
             data_socket = self.create_data_channel()
             port = data_socket.getsockname()[1]
             print_colorful(
                 '[DATA CHANNEL]', f'Data channel created at {HOST}:{port}', 'YELLOW')
             self.send(f'200 PORT {port}')
             conn, _ = data_socket.accept()
+            data_socket.shutdown(socket.SHUT_WR)
             print_colorful(
                 '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} connected to data channel', 'GREEN')
             file = open(to_upload, 'r')
@@ -178,8 +177,32 @@ class ClientThread(threading.Thread):
         except:
             self.send('550 Failed to open file.')
 
-    def put(self):
-        print("put")
+    def put(self, file_name):
+        try:
+            to_download = self.absolute_path(file_name)
+
+            data_socket = self.create_data_channel()
+            port = data_socket.getsockname()[1]
+            print_colorful(
+                '[DATA CHANNEL]', f'Data channel created at {HOST}:{port}', 'YELLOW')
+            self.send(f'200 PORT {port}')
+            conn, _ = data_socket.accept()
+            data_socket.shutdown(socket.SHUT_WR)
+            print_colorful(
+                '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} connected to data channel', 'GREEN')
+
+            file = open(to_download, 'w')
+            data = conn.recv(MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
+            while data:
+                file.write(data)
+                data = conn.recv(MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
+            file.close()
+
+            self.send('226 Transfer complete.')
+            print_colorful(
+                '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} transfer completed', 'GREEN')
+        except:
+            self.send('550 Failed to open file.')
 
     def pwd(self):
         self.send(
