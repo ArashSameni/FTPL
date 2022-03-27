@@ -1,7 +1,7 @@
 import socket
 
 HOST = "127.0.0.1"
-PORT = 65432
+PORT = 2121
 MESSAGE_SIZE = 1024
 ENC_TYPE = 'utf-8'
 COLORS = {
@@ -31,19 +31,27 @@ HELP_MESSAGE = '''[HELP]
 
 
 class Command():
-    COMMANDS = ['ls', 'get', 'put', 'pwd', 'mkdir', 'rmdir', 'cd', 'delete', 'rename']
+    COMMANDS = ['ls', 'get', 'put', 'pwd',
+                'mkdir', 'rmdir', 'cd', 'delete', 'rename']
 
     def __init__(self, cmd):
         self.type, self.args = Command.split_command(cmd)
-        self.type = self.type.lower()
+        self.type = self.type.lower().replace('list', 'ls')
+
         if self.type not in Command.COMMANDS:
             raise ValueError()
-        
+
     def split_command(cmd):
         first_space = cmd.find(' ')
         if first_space < 0:
             return cmd, ''
         return cmd[:first_space], cmd[first_space + 1:]
+
+    def text(self):
+        result = self.type
+        if self.args:
+            result += ' ' + self.args
+        return result
 
 
 def print_colorful(short_desc, text, color):
@@ -68,6 +76,33 @@ def print_result(result):
     print(str(status_code) + message + COLORS['RESET'])
 
 
+def handle_get_command(client_socket, cmd):
+    remote_file_name = cmd.args
+    local_file_name = remote_file_name
+    if ' ' in cmd.args:
+        remote_file_name, local_file_name = cmd.args.split(' ')
+    
+    client_socket.sendall(f'get {remote_file_name}'.encode(ENC_TYPE))
+    port = 0
+    result = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+    if result.startswith('200'):
+        port = int(result.split(' ')[-1])
+    else:
+        print_result(result)
+        return
+    data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        data_socket.connect((HOST, port))
+    except:
+        print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
+        
+    data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+    while data:
+        data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+
+    result = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+    print_result(result)
+
 def handle_commands(client_socket):
     while True:
         print(COLORS['WHITE'] + '[COMMAND]    ', end='')
@@ -81,12 +116,16 @@ def handle_commands(client_socket):
 
         try:
             cmd = Command(inp)
+            if cmd.type == 'get':
+                handle_get_command(client_socket, cmd)
+            else:
+                client_socket.sendall(cmd.text().encode(ENC_TYPE))
+                data = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+                print_result(data)
 
-            client_socket.sendall(inp.encode(ENC_TYPE))
-            data = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-            print_result(data)
         except:
             print_colorful('[ERROR]', 'Bad command', 'RED')
+
 
 def main():
     print_colorful('[CONNECTING]', 'Connecting to server...', 'YELLOW')

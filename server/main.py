@@ -1,10 +1,11 @@
+from random import randint
 import socket
 import threading
 import os
 import pathlib
 
 HOST = "127.0.0.1"
-PORT = 65432
+PORT = 2121
 MESSAGE_SIZE = 1024
 FILES_DIR = str(pathlib.Path(__file__).parent.resolve()) + '/files'
 COLORS = {
@@ -21,6 +22,8 @@ COLORS = {
 
 active_connections = 0
 print_lock = threading.Lock()
+
+
 def print_colorful(short_desc, text, color):
     SPACE_NEEDED = 21
     spaces = ' ' * (SPACE_NEEDED - len(short_desc))
@@ -28,6 +31,7 @@ def print_colorful(short_desc, text, color):
     print_lock.acquire()
     print(COLORS[color] + short_desc + spaces + text + COLORS['RESET'])
     print_lock.release()
+
 
 class Command():
     LIST = 'ls'
@@ -60,20 +64,22 @@ class ClientThread(threading.Thread):
         threading.Thread.__init__(self, args=args)
 
     def run(self):
-        print_colorful('[NEW CONNECTION]', f'{self.addr[0]} connected at port {self.addr[1]}', 'YELLOW')
+        print_colorful(
+            '[NEW CONNECTION]', f'{self.addr[0]} connected at port {self.addr[1]}', 'YELLOW')
 
         while True:
             message = self.conn.recv(MESSAGE_SIZE).decode(
                 ClientThread.ENC_TYPE)
             if not message:
                 break
-            print_colorful(f'[{self.addr[0]}:{self.addr[1]}]', f'"{message}"', 'CYAN')
+            print_colorful(f'[{self.addr[0]}:{self.addr[1]}]',
+                           f'"{message}"', 'CYAN')
 
             cmd = Command(message)
             if cmd.type == Command.LIST:
                 self.list()
             elif cmd.type == Command.GET:
-                self.get()
+                self.get(cmd.args)
             elif cmd.type == Command.PUT:
                 self.put()
             elif cmd.type == Command.PWD:
@@ -95,16 +101,36 @@ class ClientThread(threading.Thread):
         global active_connections
         active_connections -= 1
 
-        print_colorful('[CONNECTION LOST]', f'{self.addr[0]}:{self.addr[1]} disconnected', 'RED')
-        print_colorful('[ACTIVE CONNECTIONS]', str(active_connections), 'GREEN')
+        print_colorful('[CONNECTION LOST]',
+                       f'{self.addr[0]}:{self.addr[1]} disconnected', 'RED')
+        print_colorful('[ACTIVE CONNECTIONS]',
+                       str(active_connections), 'GREEN')
 
         self.conn.close()
 
     def list(self):
         print("list")
 
-    def get(self):
-        print("get")
+    def get(self, file_name):
+        try:
+            to_upload = self.absolute_path(file_name)
+            if not to_upload.startswith(FILES_DIR):
+                raise Exception()
+            data_socket = self.create_data_channel()
+            port = data_socket.getsockname()[1]
+            print_colorful(
+                '[DATA CHANNEL]', f'Data channel created at {HOST}:{port}', 'YELLOW')
+            self.send(f'200 PORT {port}')
+            conn, _ = data_socket.accept()
+            print_colorful(
+                '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} connected to data channel', 'GREEN')
+            file = open(to_upload, 'r')
+            conn.send(file.read().encode(ClientThread.ENC_TYPE))
+            file.close()
+            conn.shutdown(socket.SHUT_WR)
+            self.send('226 Transfer complete.')
+        except:
+            self.send('550 Failed to open file.')
 
     def put(self):
         print("put")
@@ -161,6 +187,18 @@ class ClientThread(threading.Thread):
     def rename(self):
         print("rename")
 
+    def create_data_channel(self):
+        random_port = randint(3000, 50000)
+        data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        while True:
+            try:
+                data_socket.bind((HOST, random_port))
+                break
+            except:
+                random_port = randint(3000, 50000)
+        data_socket.listen()
+        return data_socket
+
     def absolute_path(self, joining_path):
         return os.path.normpath(os.path.join(FILES_DIR, self.current_directory, joining_path))
 
@@ -176,7 +214,8 @@ def handle_incoming_requests(socket):
         ClientThread(conn, addr).start()
 
         active_connections += 1
-        print_colorful('[ACTIVE CONNECTIONS]', str(active_connections), 'GREEN')
+        print_colorful('[ACTIVE CONNECTIONS]',
+                       str(active_connections), 'GREEN')
 
 
 def main():
@@ -184,7 +223,8 @@ def main():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((HOST, PORT))
     server_socket.listen()
-    print_colorful('[SERVER STARTED]', f'Server is listening on {HOST}:{PORT}', 'GREEN')
+    print_colorful('[SERVER STARTED]',
+                   f'Server is listening on {HOST}:{PORT}', 'GREEN')
 
     handle_incoming_requests(server_socket)
 
