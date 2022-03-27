@@ -1,5 +1,6 @@
 import socket
 import shlex
+import os
 
 HOST = "127.0.0.1"
 PORT = 2121
@@ -27,6 +28,7 @@ HELP_MESSAGE = '''[HELP]
     RMDIR    Remove directory on the remote machine
     DELETE   Delete remote file
     RENAME   Rename file/directory
+    CLEAR    Clears the terminal
     EXIT     Terminate ftp session and exit
 '''
 
@@ -84,7 +86,7 @@ def handle_get_command(client_socket, cmd):
     if len(args) == 0 or len(args) > 2:
         print_colorful('[ERROR]', "Invalid use of get command", 'RED')
         return
-    
+
     remote_file_name = args[0]
     if len(args) == 1:
         local_file_name = remote_file_name.split('/')[-1]
@@ -116,6 +118,34 @@ def handle_get_command(client_socket, cmd):
     print_result(result)
 
 
+def handle_list_command(client_socket):
+    client_socket.sendall('ls'.encode(ENC_TYPE))
+    port = 0
+    result = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+    if result.startswith('200'):
+        port = int(result.split(' ')[-1])
+    else:
+        print_result(result)
+        return
+
+    data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        data_socket.connect((HOST, port))
+    except:
+        print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
+        return
+
+    print(COLORS['CYAN'], end='')
+    data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+    while data:
+        print(data)
+        data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+    print(COLORS['RESET'], end='')
+    
+    result = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+    print_result(result)
+
+
 def handle_commands(client_socket):
     while True:
         print(COLORS['WHITE'] + '[COMMAND]    ', end='')
@@ -123,21 +153,28 @@ def handle_commands(client_socket):
         if inp.lower() == 'help':
             print(COLORS['CYAN'] + HELP_MESSAGE + COLORS['RESET'])
             continue
+        if inp.lower() == 'clear':
+            os.system('cls' if os.name == 'nt' else 'clear')
+            continue
         if inp.lower() == 'exit':
             client_socket.close()
             exit(0)
 
+        cmd = None
         try:
             cmd = Command(inp)
-            if cmd.type == 'get':
-                handle_get_command(client_socket, cmd)
-            else:
-                client_socket.sendall(cmd.text().encode(ENC_TYPE))
-                data = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-                print_result(data)
-
         except:
             print_colorful('[ERROR]', 'Bad command', 'RED')
+            continue
+
+        if cmd.type == 'get':
+            handle_get_command(client_socket, cmd)
+        elif cmd.type == 'ls':
+            handle_list_command(client_socket)
+        else:
+            client_socket.sendall(cmd.text().encode(ENC_TYPE))
+            data = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+            print_result(data)
 
 
 def main():

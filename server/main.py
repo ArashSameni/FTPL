@@ -3,6 +3,7 @@ import socket
 import threading
 import os
 import pathlib
+from time import sleep
 
 HOST = "127.0.0.1"
 PORT = 2121
@@ -31,6 +32,14 @@ def print_colorful(short_desc, text, color):
     print_lock.acquire()
     print(COLORS[color] + short_desc + spaces + text + COLORS['RESET'])
     print_lock.release()
+
+
+def human_readable_size(num, suffix="B"):
+    for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
+        if abs(num) < 1024.0:
+            return f"{num:3.1f}{unit}{suffix}"
+        num /= 1024.0
+    return f"{num:.1f}Yi{suffix}"
 
 
 class Command():
@@ -109,7 +118,41 @@ class ClientThread(threading.Thread):
         self.conn.close()
 
     def list(self):
-        print("list")
+        try:
+            data_socket = self.create_data_channel()
+            port = data_socket.getsockname()[1]
+            print_colorful(
+                '[DATA CHANNEL]', f'Data channel created at {HOST}:{port}', 'YELLOW')
+            self.send(f'200 PORT {port}')
+            conn, _ = data_socket.accept()
+            print_colorful(
+                '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} connected to data channel', 'GREEN')
+
+            current_dir = self.absolute_path()
+
+            conn.send('[LIST]'.encode(ClientThread.ENC_TYPE))
+            sleep(0.001)
+            conn.send('  > .'.encode(ClientThread.ENC_TYPE))
+            sleep(0.001)
+            if self.current_directory:
+                conn.send('  > ..'.encode(ClientThread.ENC_TYPE))
+
+            ls = os.listdir(current_dir)
+            for fname in ls:
+                path_to_file = current_dir + '/' + fname
+                if os.path.isdir(path_to_file):
+                    conn.send(f'  > {fname}'.encode(ClientThread.ENC_TYPE))
+                elif os.path.isfile(path_to_file):
+                    conn.send(('    %-20s' % fname + human_readable_size(
+                        os.path.getsize(path_to_file))).encode(ClientThread.ENC_TYPE))
+                sleep(0.001)
+
+            conn.shutdown(socket.SHUT_WR)
+            self.send('226 Directory send OK.')
+            print_colorful(
+                '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} directory sent', 'GREEN')
+        except:
+            self.send('550 Permission denied.')
 
     def get(self, file_name):
         try:
@@ -201,7 +244,7 @@ class ClientThread(threading.Thread):
         data_socket.listen()
         return data_socket
 
-    def absolute_path(self, joining_path):
+    def absolute_path(self, joining_path=''):
         return os.path.normpath(os.path.join(FILES_DIR, self.current_directory, joining_path))
 
     def send(self, message):
