@@ -4,6 +4,7 @@ import threading
 import os
 import pathlib
 from time import sleep
+import shlex
 
 HOST = "127.0.0.1"
 PORT = 2121
@@ -102,7 +103,7 @@ class ClientThread(threading.Thread):
             elif cmd.type == Command.DELETE:
                 self.delete(cmd.args)
             elif cmd.type == Command.RENAME:
-                self.rename()
+                self.rename(cmd.args)
 
         self.close_connection()
 
@@ -195,9 +196,6 @@ class ClientThread(threading.Thread):
     def rmdir(self, dir_name):
         try:
             to_remove = self.absolute_path(dir_name)
-            if not to_remove.startswith(FILES_DIR):
-                raise Exception()
-
             os.rmdir(to_remove)
             self.send(
                 f'250 Remove directory operation successful.')
@@ -205,31 +203,28 @@ class ClientThread(threading.Thread):
             self.send('550 Remove directory operation failed.')
 
     def cd(self, dir_path):
-        new_path = self.absolute_path(dir_path)
-        if not os.path.isdir(new_path) or not new_path.startswith(FILES_DIR):
+        try:
+            self.absolute_path(dir_path)
+
+            self.current_directory = os.path.normpath(
+                os.path.join(self.current_directory, dir_path))
+            if self.current_directory == '.':
+                self.current_directory = ''
+
+            self.send('250 Directory successfully changed.')
+        except:
             self.send('550 Failed to change directory.')
-            return
-
-        self.current_directory = os.path.normpath(
-            os.path.join(self.current_directory, dir_path))
-        if self.current_directory == '.':
-            self.current_directory = ''
-
-        self.send('250 Directory successfully changed.')
 
     def delete(self, file_name):
         try:
             to_remove = self.absolute_path(file_name)
-            if not to_remove.startswith(FILES_DIR):
-                raise Exception()
-
             os.remove(to_remove)
             self.send(
                 f'250 Delete operation successful.')
         except:
             self.send('550 Delete operation failed.')
 
-    def rename(self):
+    def rename(self, args):
         print("rename")
 
     def create_data_channel(self):
@@ -245,7 +240,11 @@ class ClientThread(threading.Thread):
         return data_socket
 
     def absolute_path(self, joining_path=''):
-        return os.path.normpath(os.path.join(FILES_DIR, self.current_directory, joining_path))
+        joined_path = os.path.normpath(os.path.join(FILES_DIR, self.current_directory, joining_path))
+        if not joined_path.startswith(FILES_DIR):
+                raise Exception()
+
+        return joined_path
 
     def send(self, message):
         self.conn.sendall(message.encode(ClientThread.ENC_TYPE))

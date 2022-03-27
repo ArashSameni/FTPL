@@ -27,7 +27,7 @@ HELP_MESSAGE = '''[HELP]
     MKDIR    Make directory on the remote machine
     RMDIR    Remove directory on the remote machine
     DELETE   Delete remote file
-    RENAME   Rename file/directory
+    RENAME   Rename file.    Example: rename from-name to-name
     CLEAR    Clears the terminal
     EXIT     Terminate ftp session and exit
 '''
@@ -79,102 +79,104 @@ def print_result(result):
     print(str(status_code) + message + COLORS['RESET'])
 
 
-def handle_get_command(client_socket, cmd):
-    remote_file_name, local_file_name = '', ''
+class ClientHandler():
+    def __init__(self, socket):
+        self.socket = socket
 
-    args = shlex.split(cmd.args)
-    if len(args) == 0 or len(args) > 2:
-        print_colorful('[ERROR]', "Invalid use of get command", 'RED')
-        return
+    def run(self):
+        while True:
+            print(COLORS['WHITE'] + '[COMMAND]    ', end='')
+            inp = input().strip()
+            if inp.lower() == 'help':
+                print(COLORS['CYAN'] + HELP_MESSAGE + COLORS['RESET'])
+                continue
+            if inp.lower() == 'clear':
+                os.system('cls' if os.name == 'nt' else 'clear')
+                continue
+            if inp.lower() == 'exit':
+                self.socket.close()
+                break
 
-    remote_file_name = args[0]
-    if len(args) == 1:
-        local_file_name = remote_file_name.split('/')[-1]
-    else:
-        local_file_name = args[1]
+            cmd = None
+            try:
+                cmd = Command(inp)
+            except:
+                print_colorful('[ERROR]', 'Bad command', 'RED')
+                continue
 
-    client_socket.sendall(f'get {remote_file_name}'.encode(ENC_TYPE))
-    port = 0
-    result = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-    if result.startswith('200'):
-        port = int(result.split(' ')[-1])
-    else:
-        print_result(result)
-        return
-    data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        data_socket.connect((HOST, port))
-    except:
-        print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
-        return
+            if cmd.type == 'get':
+                self.get(cmd)
+            elif cmd.type == 'ls':
+                self.list()
+            else:
+                self.socket.sendall(cmd.text().encode(ENC_TYPE))
+                data = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+                print_result(data)
 
-    file = open(local_file_name, 'w')
-    data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-    while data:
-        file.write(data)
-        data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-    file.close()
-    result = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-    print_result(result)
-
-
-def handle_list_command(client_socket):
-    client_socket.sendall('ls'.encode(ENC_TYPE))
-    port = 0
-    result = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-    if result.startswith('200'):
-        port = int(result.split(' ')[-1])
-    else:
-        print_result(result)
-        return
-
-    data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        data_socket.connect((HOST, port))
-    except:
-        print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
-        return
-
-    print(COLORS['CYAN'], end='')
-    data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-    while data:
-        print(data)
-        data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-    print(COLORS['RESET'], end='')
-    
-    result = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-    print_result(result)
-
-
-def handle_commands(client_socket):
-    while True:
-        print(COLORS['WHITE'] + '[COMMAND]    ', end='')
-        inp = input().strip()
-        if inp.lower() == 'help':
-            print(COLORS['CYAN'] + HELP_MESSAGE + COLORS['RESET'])
-            continue
-        if inp.lower() == 'clear':
-            os.system('cls' if os.name == 'nt' else 'clear')
-            continue
-        if inp.lower() == 'exit':
-            client_socket.close()
-            exit(0)
-
-        cmd = None
-        try:
-            cmd = Command(inp)
-        except:
-            print_colorful('[ERROR]', 'Bad command', 'RED')
-            continue
-
-        if cmd.type == 'get':
-            handle_get_command(client_socket, cmd)
-        elif cmd.type == 'ls':
-            handle_list_command(client_socket)
+    def list(self):
+        self.socket.sendall('ls'.encode(ENC_TYPE))
+        port = 0
+        result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        if result.startswith('200'):
+            port = int(result.split(' ')[-1])
         else:
-            client_socket.sendall(cmd.text().encode(ENC_TYPE))
-            data = client_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
-            print_result(data)
+            print_result(result)
+            return
+
+        data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            data_socket.connect((HOST, port))
+        except:
+            print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
+            return
+
+        print(COLORS['CYAN'], end='')
+        data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        while data:
+            print(data)
+            data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        print(COLORS['RESET'], end='')
+
+        result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        print_result(result)
+
+    def get(self, cmd):
+        remote_file_name, local_file_name = '', ''
+
+        args = shlex.split(cmd.args)
+        if len(args) == 0 or len(args) > 2:
+            print_colorful('[ERROR]', "Invalid use of get command", 'RED')
+            return
+
+        remote_file_name = args[0]
+        if len(args) == 1:
+            local_file_name = remote_file_name.split('/')[-1]
+        else:
+            local_file_name = args[1]
+
+        self.socket.sendall(f'get {remote_file_name}'.encode(ENC_TYPE))
+        port = 0
+        result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        if result.startswith('200'):
+            port = int(result.split(' ')[-1])
+        else:
+            print_result(result)
+            return
+        data_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            data_socket.connect((HOST, port))
+        except:
+            print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
+            return
+
+        file = open(local_file_name, 'w')
+        data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        while data:
+            file.write(data)
+            data = data_socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        file.close()
+        result = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        print_result(result)
 
 
 def main():
@@ -186,7 +188,7 @@ def main():
 
     print(COLORS['CYAN'] + HELP_MESSAGE + COLORS['RESET'])
 
-    handle_commands(client_socket)
+    ClientHandler(client_socket).run()
 
 
 if __name__ == '__main__':
