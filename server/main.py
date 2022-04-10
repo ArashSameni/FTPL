@@ -153,7 +153,7 @@ class ClientThread(threading.Thread):
     def get(self, file_name):
         try:
             to_upload = self.absolute_path(file_name)
-
+            self.send('150 Here comes the file')
             file = open(to_upload, 'r')
             self.data_connection.send(file.read().encode(ClientThread.ENC_TYPE))
             file.close()
@@ -163,6 +163,7 @@ class ClientThread(threading.Thread):
             print_colorful(
                 '[DATA CHANNEL]', f'{self.addr[0]}:{self.addr[1]} transfer completed', 'GREEN')
         except:
+            self.data_connection.shutdown(socket.SHUT_WR)
             self.send('550 Failed to open file.')
 
     def put(self, file_name):

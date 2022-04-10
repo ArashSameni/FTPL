@@ -149,11 +149,20 @@ class ClientHandler():
         else:
             local_file_name = args[1]
 
+        if remote_file_name.endswith('/') or remote_file_name.endswith('/..'):
+            print_colorful('[ERROR]', "Invalid remote file name", 'RED')
+            return
+
         data_channel = self.connect_to_data_channel()
         if not data_channel:
             return
 
         self.send(f'get {remote_file_name}')
+        resp = self.socket.recv(MESSAGE_SIZE).decode(ENC_TYPE)
+        if not resp.startswith('150'):
+            print_result(resp)
+            return
+            
         file = open(local_file_name, 'w')
         data = data_channel.recv(MESSAGE_SIZE).decode(ENC_TYPE)
         while data:
