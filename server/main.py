@@ -5,6 +5,8 @@ import os
 import pathlib
 from time import sleep
 import shlex
+import sys
+sys.tracebacklimit = 0
 
 HOST = "127.0.0.1"
 PORT = 2121
@@ -131,13 +133,15 @@ class ClientThread(threading.Thread):
             self.data_connection.send('  > .'.encode(ClientThread.ENC_TYPE))
             sleep(0.001)
             if self.current_directory:
-                self.data_connection.send('  > ..'.encode(ClientThread.ENC_TYPE))
+                self.data_connection.send(
+                    '  > ..'.encode(ClientThread.ENC_TYPE))
 
             ls = os.listdir(current_dir)
             for fname in ls:
                 path_to_file = current_dir + '/' + fname
                 if os.path.isdir(path_to_file):
-                    self.data_connection.send(f'  > {fname}'.encode(ClientThread.ENC_TYPE))
+                    self.data_connection.send(
+                        f'  > {fname}'.encode(ClientThread.ENC_TYPE))
                 elif os.path.isfile(path_to_file):
                     self.data_connection.send(('    %-20s' % fname + human_readable_size(
                         os.path.getsize(path_to_file))).encode(ClientThread.ENC_TYPE))
@@ -158,7 +162,8 @@ class ClientThread(threading.Thread):
                 return
             self.send('150 Here comes the file')
             file = open(to_upload, 'r')
-            self.data_connection.send(file.read().encode(ClientThread.ENC_TYPE))
+            self.data_connection.send(
+                file.read().encode(ClientThread.ENC_TYPE))
             file.close()
             self.data_connection.shutdown(socket.SHUT_WR)
 
@@ -177,10 +182,12 @@ class ClientThread(threading.Thread):
                 return
 
             file = open(to_download, 'w')
-            data = self.data_connection.recv(MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
+            data = self.data_connection.recv(
+                MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
             while data:
                 file.write(data)
-                data = self.data_connection.recv(MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
+                data = self.data_connection.recv(
+                    MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
             file.close()
 
             self.send('226 Transfer complete.')
@@ -204,8 +211,8 @@ class ClientThread(threading.Thread):
     def rmdir(self, dir_name):
         try:
             to_remove = self.absolute_path(dir_name)
-            if not pathlib.Path(to_remove).is_file():
-                self.send("550 File doesn't exist.")
+            if not pathlib.Path(to_remove).is_dir():
+                self.send("550 Directory doesn't exist.")
                 return
             os.rmdir(to_remove)
             self.send(
