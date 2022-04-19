@@ -2,8 +2,8 @@ import socket
 import shlex
 import os
 
-HOST = "127.0.0.1"
-PORT = 2121
+HOST = ''
+PORT = 0
 MESSAGE_SIZE = 1024
 ENC_TYPE = 'utf-8'
 COLORS = {
@@ -103,9 +103,10 @@ class ClientHandler():
             except:
                 print_colorful('[ERROR]', 'Bad command', 'RED')
                 continue
-            
+
             if cmd.type == 'rename' and len(shlex.split(cmd.args)) != 2:
-                print_colorful('[ERROR]', "Invalid use of rename command", 'RED')
+                print_colorful(
+                    '[ERROR]', "Invalid use of rename command", 'RED')
                 continue
 
             if cmd.type == 'ls':
@@ -162,7 +163,7 @@ class ClientHandler():
         if not resp.startswith('150'):
             print_result(resp)
             return
-            
+
         file = open(local_file_name, 'w')
         data = data_channel.recv(MESSAGE_SIZE).decode(ENC_TYPE)
         while data:
@@ -189,7 +190,7 @@ class ClientHandler():
         if not os.path.isfile(local_file_name):
             print_colorful('[ERROR]', "No such file or directory", 'RED')
             return
-        
+
         data_channel = self.connect_to_data_channel()
         if not data_channel:
             return
@@ -227,22 +228,31 @@ class ClientHandler():
         except:
             print_colorful('[ERROR]', "Couldn't connect to server", 'RED')
             return None
-        
+
         return data_socket
 
     def send(self, message):
         self.socket.sendall(message.encode(ENC_TYPE))
 
+
 def main():
+    global HOST, PORT
+    HOST = input(COLORS['CYAN'] + 'Server address: ' + COLORS['WHITE'])
+    PORT = int(input(COLORS['CYAN'] + 'Server PORT: ' + COLORS['WHITE']))
+
     print_colorful('[CONNECTING]', 'Connecting to server...', 'YELLOW')
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((HOST, PORT))
-    print_colorful(
-        '[CONNECTED]', f'Successfully connected to {HOST}:{PORT}', 'GREEN')
+    try:
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        client_socket.connect((HOST, PORT))
+        print_colorful(
+            '[CONNECTED]', f'Successfully connected to {HOST}:{PORT}', 'GREEN')
 
-    print(COLORS['CYAN'] + HELP_MESSAGE + COLORS['RESET'])
+        print(COLORS['CYAN'] + HELP_MESSAGE + COLORS['RESET'])
 
-    ClientHandler(client_socket).run()
+        ClientHandler(client_socket).run()
+    except:
+        print_colorful(
+            '[ERROR]', f"Couldn't connect to {HOST}:{PORT}", 'RED')
 
 
 if __name__ == '__main__':
