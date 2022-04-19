@@ -153,6 +153,9 @@ class ClientThread(threading.Thread):
     def get(self, file_name):
         try:
             to_upload = self.absolute_path(file_name)
+            if not pathlib.Path(to_upload).is_file():
+                self.send("550 File doesn't exist.")
+                return
             self.send('150 Here comes the file')
             file = open(to_upload, 'r')
             self.data_connection.send(file.read().encode(ClientThread.ENC_TYPE))
@@ -169,6 +172,9 @@ class ClientThread(threading.Thread):
     def put(self, file_name):
         try:
             to_download = self.absolute_path(file_name)
+            if not pathlib.Path(to_download).is_file():
+                self.send("550 File doesn't exist.")
+                return
 
             file = open(to_download, 'w')
             data = self.data_connection.recv(MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
@@ -198,6 +204,9 @@ class ClientThread(threading.Thread):
     def rmdir(self, dir_name):
         try:
             to_remove = self.absolute_path(dir_name)
+            if not pathlib.Path(to_remove).is_file():
+                self.send("550 File doesn't exist.")
+                return
             os.rmdir(to_remove)
             self.send(
                 f'250 Remove directory operation successful.')
@@ -206,7 +215,10 @@ class ClientThread(threading.Thread):
 
     def cd(self, dir_path):
         try:
-            self.absolute_path(dir_path)
+            new_path = self.absolute_path(dir_path)
+            if not pathlib.Path(new_path).is_dir():
+                self.send("550 Directory doesn't exist.")
+                return
 
             self.current_directory = os.path.normpath(
                 os.path.join(self.current_directory, dir_path))
@@ -220,6 +232,9 @@ class ClientThread(threading.Thread):
     def delete(self, file_name):
         try:
             to_remove = self.absolute_path(file_name)
+            if not pathlib.Path(to_remove).is_file():
+                self.send("550 File doesn't exist.")
+                return
             os.remove(to_remove)
             self.send(
                 f'250 Delete operation successful.')
@@ -229,7 +244,12 @@ class ClientThread(threading.Thread):
     def rename(self, args):
         from_name, to_name = shlex.split(args)
         try:
-            os.rename(self.absolute_path(from_name),
+            from_path = self.absolute_path(from_name)
+            if not pathlib.Path(from_path).is_file():
+                self.send("550 File doesn't exist.")
+                return
+
+            os.rename(from_path,
                       self.absolute_path(to_name))
             self.send('250 Rename successful.')
         except:
