@@ -177,10 +177,6 @@ class ClientThread(threading.Thread):
     def put(self, file_name):
         try:
             to_download = self.absolute_path(file_name)
-            if not pathlib.Path(to_download).is_file():
-                self.send("550 File doesn't exist.")
-                return
-
             file = open(to_download, 'w')
             data = self.data_connection.recv(
                 MESSAGE_SIZE).decode(ClientThread.ENC_TYPE)
