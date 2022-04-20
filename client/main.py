@@ -241,18 +241,19 @@ def main():
     PORT = int(input(COLORS['CYAN'] + 'Server PORT: ' + COLORS['WHITE']))
 
     print_colorful('[CONNECTING]', 'Connecting to server...', 'YELLOW')
+    client_socket = None
     try:
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_socket.connect((HOST, PORT))
         print_colorful(
             '[CONNECTED]', f'Successfully connected to {HOST}:{PORT}', 'GREEN')
-
-        print(COLORS['CYAN'] + HELP_MESSAGE + COLORS['RESET'])
-
-        ClientHandler(client_socket).run()
     except:
         print_colorful(
             '[ERROR]', f"Couldn't connect to {HOST}:{PORT}", 'RED')
+        exit(1)
+
+    print(COLORS['CYAN'] + HELP_MESSAGE + COLORS['RESET'])
+    ClientHandler(client_socket).run()
 
 
 if __name__ == '__main__':
